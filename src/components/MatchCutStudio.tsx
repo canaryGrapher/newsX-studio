@@ -1,13 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import Papa from "papaparse";
 import html2canvas from "html2canvas";
 import { Article, CANVAS_PRESETS } from "./NewspaperCanvas";
 import NewspaperView from "./NewspaperView";
-import { extractHighlights } from "@/lib/content";
+import { articleHighlights } from "@/lib/content";
 import { rowToArticle } from "@/lib/csvArticle";
+import { Row, reviewRow } from "@/lib/csvReview";
+import CsvReviewTable from "./CsvReviewTable";
 import { NEWSPAPER_THEMES, getNewspaperTheme } from "@/lib/newspaperThemes";
 import { workerDelay } from "@/lib/workerClock";
 import {
@@ -18,7 +20,7 @@ import {
   recordMatchCut,
   highlightProgress,
 } from "@/lib/matchcut";
-import { ExportFormat, webmToMp4 } from "@/lib/videoExport";
+import { ExportFormat, webmToMp4, webmToGif } from "@/lib/videoExport";
 import { sliceAudioBuffer } from "@/lib/audioTrim";
 import WaveformTrim from "./AudioTrim";
 import { analytics } from "@/lib/analytics";
@@ -96,8 +98,20 @@ async function resolveArticleImages(art: Article): Promise<Record<string, string
 export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps) {
   // Source selection
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [csvArticles, setCsvArticles] = useState<Article[]>([]);
+  const [csvRows, setCsvRows] = useState<Row[]>([]);
+  const [csvFields, setCsvFields] = useState<string[]>([]);
   const [csvName, setCsvName] = useState("");
+
+  // Validate rows live; only rows without blocking issues become frames.
+  const csvReviews = useMemo(() => csvRows.map(reviewRow), [csvRows]);
+  const csvArticles = useMemo(
+    () =>
+      csvRows
+        .filter((_, i) => csvReviews[i]?.usable)
+        .map((r, i) => rowToArticle(r, i)),
+    [csvRows, csvReviews]
+  );
+  const csvUsable = csvReviews.filter((r) => r.usable).length;
 
   // Preparation
   const [frames, setFrames] = useState<PreparedFrame[]>([]);
@@ -291,13 +305,13 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
       header: true,
       skipEmptyLines: true,
       complete: (res) => {
-        const rows = res.data as Record<string, string>[];
-        const arts = rows
-          .map((r, i) => rowToArticle(r, i))
-          .filter((a) => extractHighlights(a.content).length > 0);
-        analytics.csvUploaded(file.name, rows.length, arts.length);
-        if (arts.length === 0) analytics.csvUploadEmpty(file.name);
-        setCsvArticles(arts);
+        const rows = res.data as Row[];
+        const fields = (res.meta.fields ?? Object.keys(rows[0] ?? {})).filter(Boolean);
+        const usable = rows.filter((r) => reviewRow(r).usable).length;
+        analytics.csvUploaded(file.name, rows.length, usable);
+        if (usable === 0) analytics.csvUploadEmpty(file.name);
+        setCsvFields(fields);
+        setCsvRows(rows);
       },
     });
   };
@@ -364,7 +378,7 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
 
   // ── Prepare frames ──
   const startPrepare = () => {
-    const list = sourceArticles.filter((a) => extractHighlights(a.content).length > 0);
+    const list = sourceArticles.filter((a) => articleHighlights(a).length > 0);
     if (list.length < 2) {
       analytics.prepareRejected(list.length);
       setStatus("Pick at least 2 articles that contain highlighted text.");
@@ -441,7 +455,7 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
           }
         }
 
-        const label = extractHighlights(art.content)[0] || art.headline;
+        const label = articleHighlights(art)[0] || art.headline;
         setFrames((prev) => [...prev, { bitmap, plainBitmap, hl, label }]);
       } catch (err) {
         console.error("Frame prep failed:", err);
@@ -595,6 +609,7 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
         bgVolume,
       };
       const wantMp4 = format === "mp4";
+      const wantGif = format === "gif";
       const { blob, mime } = await recordMatchCut(frames, opts, audio, setRecProgress, wantMp4);
 
       let finalBlob = blob;
@@ -612,6 +627,21 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
           console.error(convErr);
           analytics.mp4ConversionFailed();
           setStatus("MP4 conversion failed — saved as WebM instead.");
+        } finally {
+          setConverting(false);
+        }
+      }
+
+      // GIF: convert the recorded WebM to an animated GIF (no audio).
+      if (wantGif) {
+        setConverting(true);
+        setStatus("Converting to GIF… (first run downloads the converter)");
+        try {
+          finalBlob = await webmToGif(blob, setConvProgress);
+          ext = "gif";
+        } catch (convErr) {
+          console.error(convErr);
+          setStatus("GIF conversion failed — saved as WebM instead.");
         } finally {
           setConverting(false);
         }
@@ -646,7 +676,7 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
     preparing && prepTotal > 0
       ? Math.min(100, Math.round(((prepCursor ?? 0) / prepTotal) * 100))
       : 0;
-  const eligibleLib = libraryArticles.filter((a) => extractHighlights(a.content).length > 0);
+  const eligibleLib = libraryArticles.filter((a) => articleHighlights(a).length > 0);
 
   return (
     <div className="form-section">
@@ -697,7 +727,7 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
                   <span className="min-w-0">
                     <span className="block text-xs font-semibold text-gray-200 truncate">{a.headline}</span>
                     <span className="block text-[10px] text-gray-500 truncate">
-                      “{extractHighlights(a.content)[0]}”
+                      “{articleHighlights(a)[0]}”
                     </span>
                   </span>
                 </button>
@@ -715,13 +745,18 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
           <Upload className="w-6 h-6 text-gray-500 opacity-60 mb-1" />
           {csvName ? (
             <div className="text-xs font-bold text-blue-400">
-              {csvName} · {csvArticles.length} usable
+              {csvName} · {csvUsable}/{csvRows.length} usable
             </div>
           ) : (
             <p className="text-[11px] text-gray-500">CSV rows with a <code>highlight</code> column</p>
           )}
         </div>
       </div>
+
+      {/* ── CSV review / fix table ── */}
+      {csvRows.length > 0 && (
+        <CsvReviewTable rows={csvRows} fields={csvFields} onChange={setCsvRows} />
+      )}
 
       {/* ── Newspaper theme override ── */}
       <div className="form-group">
@@ -1003,10 +1038,13 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
             <div style={{ display: "flex", gap: 8 }}>
               <Pill label="WebM" active={format === "webm"} onClick={() => { analytics.videoFormatChanged("webm"); setFormat("webm"); }} />
               <Pill label="MP4" active={format === "mp4"} onClick={() => { analytics.videoFormatChanged("mp4"); setFormat("mp4"); }} />
+              <Pill label="GIF" active={format === "gif"} onClick={() => { analytics.videoFormatChanged("gif"); setFormat("gif"); }} />
             </div>
             <p style={{ fontSize: "10px", color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.4 }}>
               {format === "mp4"
                 ? "MP4 is widely compatible (social, editors). If your browser can't record it directly, NewsX converts in-browser the first time."
+                : format === "gif"
+                ? "GIF is a silent, looping animation (no audio) — great for embeds and chats. Converted in-browser the first time."
                 : "WebM records fastest and natively in most browsers."}
             </p>
           </div>
@@ -1015,7 +1053,7 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
           <button type="button" onClick={handleRecord} disabled={recording} className="btn-primary w-full">
             {recording ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
             {converting
-              ? `Converting to MP4… ${Math.round(convProgress * 100)}%`
+              ? `Converting to ${format.toUpperCase()}… ${Math.round(convProgress * 100)}%`
               : recording
               ? `Recording… ${Math.round(recProgress * 100)}%`
               : `Generate ${format.toUpperCase()} Match-Cut`}
@@ -1034,7 +1072,12 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
               <label className="form-label flex items-center gap-1.5 text-green-400">
                 <Download className="w-3.5 h-3.5" /> Exported · {videoExt.toUpperCase()}
               </label>
-              <video src={videoUrl} controls loop className="w-full rounded-lg" style={{ background: "#000" }} />
+              {videoExt === "gif" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={videoUrl} alt="Match-cut GIF" className="w-full rounded-lg" style={{ background: "#000" }} />
+              ) : (
+                <video src={videoUrl} controls loop className="w-full rounded-lg" style={{ background: "#000" }} />
+              )}
               <a href={videoUrl} download={`matchcut-${Date.now()}.${videoExt}`} className="btn-secondary w-full mt-2 text-xs">
                 <Download className="w-3.5 h-3.5" /> Save .{videoExt} again
               </a>
@@ -1043,7 +1086,7 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
         </>
       )}
 
-      {sourceArticles.length > 0 && extractHighlights(sourceArticles.map((a) => a.content).join("")).length === 0 && (
+      {sourceArticles.length > 0 && sourceArticles.every((a) => articleHighlights(a).length === 0) && (
         <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 p-3 rounded-lg flex gap-2 text-xs">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <div>None of the selected articles contain &lt;highlight&gt; text, which the match cut needs.</div>

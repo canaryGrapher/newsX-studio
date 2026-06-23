@@ -4,7 +4,7 @@
 
 import type { FFmpeg } from "@ffmpeg/ffmpeg";
 
-export type ExportFormat = "webm" | "mp4";
+export type ExportFormat = "webm" | "mp4" | "gif";
 
 // Single-thread core matched to @ffmpeg/ffmpeg 0.12.x. No SharedArrayBuffer /
 // COOP-COEP headers required, so it works on a plain static host.
@@ -82,6 +82,56 @@ export async function webmToMp4(
     try {
       await ff.deleteFile("in.webm");
       await ff.deleteFile("out.mp4");
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+// Transcode a WebM blob into an animated GIF. Uses a two-pass palette so colour
+// stays clean. `fps` keeps the file reasonable; width scales preserving ratio.
+export async function webmToGif(
+  input: Blob,
+  onProgress?: (p: number) => void,
+  fps = 15
+): Promise<Blob> {
+  const ff = await getFFmpeg();
+
+  const progressHandler = ({ progress }: { progress: number }) => {
+    if (onProgress) onProgress(Math.max(0, Math.min(1, progress)));
+  };
+  ff.on("progress", progressHandler);
+
+  try {
+    const bytes = new Uint8Array(await input.arrayBuffer());
+    await ff.writeFile("in.webm", bytes);
+
+    // Pass 1: generate an optimal 256-colour palette from the source.
+    await ff.exec([
+      "-i", "in.webm",
+      "-vf", `fps=${fps},palettegen=stats_mode=diff`,
+      "palette.png",
+    ]);
+
+    // Pass 2: render the GIF using that palette with dithering.
+    await ff.exec([
+      "-i", "in.webm",
+      "-i", "palette.png",
+      "-lavfi", `fps=${fps} [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=3`,
+      "out.gif",
+    ]);
+
+    const data = await ff.readFile("out.gif");
+    const buf = data instanceof Uint8Array ? data : new TextEncoder().encode(String(data));
+    const copy = new Uint8Array(buf.length);
+    copy.set(buf);
+    return new Blob([copy], { type: "image/gif" });
+  } finally {
+    ff.off("progress", progressHandler);
+    try {
+      await ff.deleteFile("in.webm");
+      await ff.deleteFile("palette.png");
+      await ff.deleteFile("out.gif");
     } catch {
       /* ignore */
     }

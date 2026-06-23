@@ -1,7 +1,7 @@
 "use client";
 
 import React, { forwardRef, useRef, useState, useEffect, useLayoutEffect } from "react";
-import { parseContent, Run, Segment } from "@/lib/content";
+import { parseContent, parseRuns, Run, Segment } from "@/lib/content";
 import { getNewspaperTheme } from "@/lib/newspaperThemes";
 import type { Article } from "./NewspaperCanvas";
 
@@ -281,7 +281,7 @@ const NewspaperView = forwardRef<HTMLDivElement, NewspaperViewProps>(
             textAlign: "left",
           }}
         >
-          {article.headline}
+          {renderRuns(parseRuns(article.headline || ""), false, hlCounter, colors)}
         </h1>
 
         {article.subheadline && (

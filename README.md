@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🗞️ NewsX — Newspaper Studio
+# 🗞️ NewsX | Newspaper Studio
 
 **Turn any story into a vintage newspaper graphic, then sequence those pages into a scroll-stopping match-cut video for Reels, Shorts, and TikTok. All in the browser.**
 

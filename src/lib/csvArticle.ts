@@ -13,8 +13,8 @@ const truthy = (v: unknown) =>
 
 // Map a raw CSV row (header-keyed) to the current Article schema.
 // Supported columns: headline, subheadline, content, image, imageCaption,
-// imageRatio, pullquote, highlight, dropcap, columns, location, author, date,
-// articleRatio.
+// imageRatio, pullquote, highlight, highlightTitle, dropcap, columns, location,
+// author, date, articleRatio.
 export function rowToArticle(row: Record<string, string>, i: number): Article {
   let content = (row.content || "").trim();
 
@@ -24,9 +24,17 @@ export function rowToArticle(row: Record<string, string>, i: number): Article {
     content = content.replace(highlight, `<highlight>${highlight}</highlight>`);
   }
 
+  // Wrap a requested phrase in the headline with <highlight> if present and not
+  // already marked. Lets a title drive the match-cut anchor.
+  let headline = row.headline || `Breaking News #${i + 1}`;
+  const highlightTitle = (row.highlightTitle || row.titleHighlight || "").trim();
+  if (highlightTitle && !hasHighlight(headline) && headline.includes(highlightTitle)) {
+    headline = headline.replace(highlightTitle, `<highlight>${highlightTitle}</highlight>`);
+  }
+
   const article: Article = {
     id: `csv-${Date.now()}-${i}`,
-    headline: row.headline || `Breaking News #${i + 1}`,
+    headline,
     subheadline: row.subheadline || "",
     content,
     date: row.date || new Date().toLocaleDateString("en-US", DATE_OPTS),

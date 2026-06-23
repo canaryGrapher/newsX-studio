@@ -77,3 +77,15 @@ export function hasHighlight(content: string): boolean {
   HIGHLIGHT_RE.lastIndex = 0;
   return HIGHLIGHT_RE.test(content);
 }
+
+// All highlighted phrases across an article's title AND body, title first.
+// Match cut anchors to the first one, so titles can drive a frame too.
+export function articleHighlights(art: {
+  headline?: string;
+  content?: string;
+}): string[] {
+  return [
+    ...extractHighlights(art.headline || ""),
+    ...extractHighlights(art.content || ""),
+  ];
+}
