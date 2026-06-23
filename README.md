@@ -4,7 +4,7 @@
 
 **Turn any story into a vintage newspaper graphic, then sequence those pages into a scroll-stopping match-cut video for Reels, Shorts, and TikTok. All in the browser.**
 
-[![Live Demo](https://img.shields.io/badge/Live_Demo-Open_App-000?style=for-the-badge&logo=vercel)](https://newsx.vercel.app)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Open_App-000?style=for-the-badge&logo=vercel)](https://newsx-studio.workvar.com)
 [![Deploy with Vercel](https://img.shields.io/badge/Deploy-Vercel-000?style=for-the-badge&logo=vercel)](https://vercel.com/new/clone?repository-url=https://github.com/canaryGrapher/newsx)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
 
