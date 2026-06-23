@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Newspaper Generator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=UnifrakturMaguntia&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Lora:ital,wght@0,400;0,700;1,400&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #2a2a2a;
+    min-height: 100vh;
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0;
+  }
+
+  /* ── Controls bar ── */
+  .controls {
+    width: 100%;
+    background: #1a1a1a;
+    border-bottom: 2px solid #444;
+    padding: 12px 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .controls label {
+    color: #ccc;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .controls select, .controls input[type=range] {
+    background: #333;
+    border: 1px solid #555;
+    color: #eee;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .btn {
+    padding: 8px 18px;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: all 0.15s;
+  }
+
+  .btn-primary {
+    background: #c8a84b;
+    color: #1a1a1a;
+  }
+  .btn-primary:hover { background: #d4b45a; transform: translateY(-1px); }
+
+  .btn-secondary {
+    background: #444;
+    color: #eee;
+    border: 1px solid #666;
+  }
+  .btn-secondary:hover { background: #555; }
+
+  .sep {
+    width: 1px;
+    height: 28px;
+    background: #444;
+    margin: 0 4px;
+  }
+
+  .controls-title {
+    color: #c8a84b;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-right: 8px;
+  }
+
+  /* ── Paper wrapper ── */
+  .paper-wrapper {
+    padding: 40px 20px 60px;
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    justify-content: center;
+  }
+
+  /* ── Newspaper ── */
+  .newspaper {
+    width: 100%;
+    max-width: 820px;
+    position: relative;
+    padding: 40px 44px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  }
+
+  /* Grain overlay */
+  .newspaper::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.06'/%3E%3C/svg%3E");
+    pointer-events: none;
+    opacity: var(--grain-opacity, 0.5);
+    z-index: 10;
+    mix-blend-mode: multiply;
+  }
+
+  /* ── Masthead ── */
+  .masthead {
+    text-align: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+  }
+
+  .masthead-name {
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    font-size: 11px;
+    margin-bottom: 6px;
+  }
+
+  .pub-date {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    opacity: 0.6;
+  }
+
+  .rule-double {
+    height: 6px;
+    border-top: 2px solid;
+    border-bottom: 1px solid;
+    margin: 8px 0;
+    opacity: 0.8;
+  }
+
+  .rule-single {
+    height: 1px;
+    border-top: 1px solid;
+    margin: 10px 0;
+    opacity: 0.5;
+  }
+
+  /* ── Headline block ── */
+  .headline {
+    text-align: left;
+    margin-bottom: 10px;
+    line-height: 1.05;
+    font-weight: 900;
+  }
+
+  .deck {
+    font-size: 18px;
+    font-weight: 400;
+    line-height: 1.3;
+    margin-bottom: 10px;
+  }
+
+  /* ── Byline ── */
+  .byline-block {
+    margin-bottom: 12px;
+  }
+
+  .dateline {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .byline {
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    font-style: italic;
+  }
+
+  /* ── Article body ── */
+  .article-body {
+    display: grid;
+    gap: 0 20px;
+    align-items: start;
+  }
+
+  .article-body p {
+    text-align: justify;
+    hyphens: auto;
+    margin-bottom: 10px;
+    line-height: 1.5;
+  }
+
+  .article-body p:first-of-type::first-letter {
+    float: left;
+    font-size: 3.4em;
+    line-height: 0.8;
+    margin-right: 5px;
+    margin-top: 4px;
+    font-weight: 900;
+  }
+
+  /* ── Photo ── */
+  .photo-block {
+    margin-bottom: 10px;
+  }
+
+  .photo-placeholder {
+    width: 100%;
+    background: linear-gradient(135deg, #888 0%, #444 40%, #666 70%, #333 100%);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .photo-placeholder::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+    mix-blend-mode: overlay;
+  }
+
+  .photo-caption {
+    font-size: 10px;
+    letter-spacing: 0.3px;
+    margin-top: 4px;
+    font-style: italic;
+    opacity: 0.7;
+  }
+
+  /* ── Pull quote ── */
+  .pull-quote {
+    border-top: 3px solid;
+    border-bottom: 1px solid;
+    padding: 12px 0;
+    margin: 10px 0;
+  }
+
+  .pull-quote p {
+    font-size: 20px !important;
+    line-height: 1.25 !important;
+    font-style: italic !important;
+    font-weight: 700;
+    text-align: left !important;
+    margin: 0 !important;
+  }
+
+  .pull-quote p::before { content: '\201C'; }
+  .pull-quote p::after  { content: '\201D'; }
+
+  /* Drop cap override for pull quote */
+  .pull-quote p::first-letter {
+    float: none !important;
+    font-size: inherit !important;
+    line-height: inherit !important;
+    margin: 0 !important;
+    font-weight: inherit !important;
+  }
+
+  /* ── Column presets ── */
+  .cols-2 { grid-template-columns: 1fr 1fr; }
+  .cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .cols-2-1 { grid-template-columns: 2fr 1fr; }
+  .cols-1-2 { grid-template-columns: 1fr 2fr; }
+
+  .span-2 { grid-column: span 2; }
+  .span-3 { grid-column: span 3; }
+  .span-full { grid-column: 1 / -1; }
+
+  /* ── Font themes ── */
+  .font-playfair    { --serif: 'Playfair Display', Georgia, serif; }
+  .font-baskerville { --serif: 'Libre Baskerville', Georgia, serif; }
+  .font-imfell      { --serif: 'IM Fell English', Georgia, serif; }
+  .font-lora        { --serif: 'Lora', Georgia, serif; }
+  .font-georgia     { --serif: Georgia, 'Times New Roman', serif; }
+
+  .newspaper { font-family: var(--serif); }
+
+  /* ── Color themes ── */
+  .theme-cream   { --bg: #f2ece0; --ink: #1a1612; --rule: #1a1612; --accent: #1a1612; }
+  .theme-aged    { --bg: #e8dfc8; --ink: #231f1a; --rule: #5a4a32; --accent: #3d2b1a; }
+  .theme-white   { --bg: #fafaf8; --ink: #111; --rule: #111; --accent: #111; }
+  .theme-sepia   { --bg: #d4c4a0; --ink: #2a1f12; --rule: #6b4c2a; --accent: #4a2f0a; }
+  .theme-dusk    { --bg: #e8e0d4; --ink: #1c2028; --rule: #2a3040; --accent: #1c2028; }
+
+  .newspaper {
+    background: var(--bg);
+    color: var(--ink);
+  }
+  .rule-double, .rule-single { border-color: var(--rule); }
+  .pull-quote { border-color: var(--rule); }
+
+  /* ── Animate in ── */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .newspaper { animation: fadeIn 0.35s ease; }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    .newspaper { padding: 24px 20px; }
+    .cols-2, .cols-3, .cols-2-1, .cols-1-2 { grid-template-columns: 1fr; }
+    .span-2, .span-3, .span-full { grid-column: span 1; }
+    .deck { font-size: 15px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Controls -->
+<div class="controls">
+  <span class="controls-title">NewsX</span>
+
+  <label>Topic
+    <select id="topicSelect">
+      <option value="random">Random</option>
+      <option value="tech">Technology</option>
+      <option value="politics">Politics</option>
+      <option value="science">Science</option>
+      <option value="economy">Economy</option>
+      <option value="environment">Environment</option>
+      <option value="sports">Sports</option>
+    </select>
+  </label>
+
+  <label>Layout
+    <select id="layoutSelect">
+      <option value="random">Random</option>
+      <option value="classic">Classic (2-col)</option>
+      <option value="wide-left">Wide Left</option>
+      <option value="wide-right">Wide Right</option>
+      <option value="three-col">Three Column</option>
+      <option value="single">Single Column</option>
+    </select>
+  </label>
+
+  <label>Font
+    <select id="fontSelect">
+      <option value="random">Random</option>
+      <option value="font-playfair">Playfair Display</option>
+      <option value="font-baskerville">Baskerville</option>
+      <option value="font-imfell">IM Fell English</option>
+      <option value="font-lora">Lora</option>
+      <option value="font-georgia">Georgia</option>
+    </select>
+  </label>
+
+  <label>Paper
+    <select id="themeSelect">
+      <option value="random">Random</option>
+      <option value="theme-cream">Cream</option>
+      <option value="theme-aged">Aged</option>
+      <option value="theme-white">White</option>
+      <option value="theme-sepia">Sepia</option>
+      <option value="theme-dusk">Dusk</option>
+    </select>
+  </label>
+
+  <label>Grain
+    <input type="range" id="grainRange" min="0" max="1" step="0.1" value="0.5" style="width:70px;">
+  </label>
+
+  <div class="sep"></div>
+
+  <button class="btn btn-primary" onclick="generate()">&#x2684; Randomize All</button>
+  <button class="btn btn-secondary" onclick="generate(false)">&#x21BB; Regenerate</button>
+</div>
+
+<!-- Paper -->
+<div class="paper-wrapper">
+  <div class="newspaper" id="newspaper">
+    <!-- generated by JS -->
+  </div>
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────
+
+const PAPERS = [
+  'The Morning Chronicle', 'The Daily Courier', 'The Evening Standard',
+  'The National Gazette', 'The Weekly Tribune', 'The Global Record',
+  'The Independent Herald', 'The Daily Observer'
+];
+
+const ARTICLES = {
+  tech: {
+    headlines: [
+      ['Tech Giants Unveil Next-Generation AI Systems', 'New models promise reasoning capabilities that surpass human benchmarks'],
+      ['Quantum Computing Milestone Achieved at Scale', 'Scientists demonstrate stable 1,000-qubit processor for the first time'],
+      ['Semiconductor Shortage Eases as Fabs Expand', 'Production capacity expected to outpace demand by third quarter'],
+      ['Open-Source Models Close Gap With Proprietary AI', 'Community-built systems now rival commercial offerings on key tests'],
+    ],
+    bodies: [
+      `Technology companies unveiled a suite of artificial intelligence systems this week, marking what analysts described as a watershed moment for the industry. The announcements, timed to coincide with the annual developer conference, drew comparisons to the introduction of the smartphone and the internet browser.\n\nThe new systems demonstrate previously unseen capacity for logical reasoning, allowing them to solve complex mathematical proofs and generate working software from natural-language descriptions alone. Executives from three major firms presented live demonstrations to a packed auditorium of thousands of engineers and investors.\n\nCritics, however, urged caution. Several researchers noted that benchmark performance does not always translate into reliable real-world utility, pointing to earlier claims that later proved difficult to replicate outside controlled conditions. Regulatory bodies in both Europe and the United States have indicated they will scrutinise the announcements closely.\n\nShares in the companies concerned rose sharply in after-hours trading, adding hundreds of billions of dollars to their combined market capitalisations. Smaller rivals saw their own valuations decline as investors reallocated capital toward the perceived market leaders.\n\nThe long-term implications for the labour market remain deeply contested. Some economists predict widespread displacement across knowledge-work professions; others argue that productivity gains will ultimately create more roles than they eliminate, as has historically been the case with prior waves of automation.`,
+      `Researchers at a national laboratory have achieved what they describe as a definitive proof of quantum advantage, demonstrating that their experimental processor completed a computational task in eleven minutes that would require ten thousand years on the world's fastest classical supercomputer.\n\nThe result, published in a peer-reviewed journal and independently verified by two university teams, represents the most credible demonstration of quantum supremacy to date. Previous claims in this area had been contested, with critics arguing that classical algorithms could be optimised to close the apparent gap.\n\nThe practical applications of the technology remain some years away. Current quantum systems require cooling to near-absolute-zero temperatures and are highly sensitive to environmental interference, limiting their deployment outside specialised laboratory settings. Nevertheless, the breakthrough has renewed investment interest in the sector.\n\nDefence agencies in several countries have expressed interest in quantum computing for cryptographic applications. The ability to break widely used encryption schemes is considered a national security priority, prompting parallel investment in so-called post-quantum cryptographic standards designed to withstand such attacks.`,
+    ],
+    quotes: [
+      'This is not incremental progress. We are witnessing a step change in what machines can do.',
+      'The question is no longer whether AI will transform every industry, but how quickly.',
+      'We must ensure that the benefits of these technologies are distributed equitably, not concentrated in the hands of a few.',
+    ],
+    captions: ['Engineers monitor the system during a live demonstration at the annual conference.', 'The new processor, housed in a specialised cooling chamber, at the research facility.'],
+  },
+  politics: {
+    headlines: [
+      ['Summit Ends With Landmark Climate Finance Deal', 'Developed nations pledge record funds for green transition in emerging economies'],
+      ['Parliament Passes Sweeping Electoral Reform Bill', 'Changes to campaign finance rules take effect ahead of next general election'],
+      ['Foreign Ministers Convene for Emergency Talks', 'Diplomatic solution sought as regional tensions reach their highest point in decades'],
+      ['Prime Minister Calls Snap Election for Autumn', 'Opposition parties scramble to consolidate ahead of shortened campaign period'],
+    ],
+    bodies: [
+      `World leaders concluded three days of intensive negotiations with an agreement that many observers called historic, though sceptics warned that the gap between pledges and action remains as wide as ever. The final communiqué committed signatories to a specific financial mechanism and a timetable for disbursement, elements that had eluded previous summits.\n\nThe deal was brokered in the early hours of the final morning after talks ran well past their scheduled conclusion. Senior officials from four countries had worked through the night to reconcile competing positions on conditionality, the degree to which recipient nations would be required to meet governance standards in exchange for funding.\n\nEnvironmental groups gave the agreement a cautious welcome while stressing that the pledged sums fall short of what scientists say is necessary to limit warming to internationally agreed thresholds. Several island nations, whose very existence is threatened by rising sea levels, issued a joint statement calling the outcome inadequate.\n\nFinancial markets reacted with muted optimism. Shares in renewable energy companies rose modestly, while fossil fuel producers were largely unchanged, suggesting that traders do not anticipate a rapid shift in the underlying economics of energy production. Economists noted that successful implementation will depend on legislative follow-through in donor countries, which is far from guaranteed.`,
+      `The government secured parliamentary approval for a package of electoral reforms after weeks of acrimonious debate, overcoming a procedural blockade by the main opposition party. The final vote passed with a narrow majority, with several members of the governing coalition breaking ranks to oppose specific provisions.\n\nThe centrepiece of the legislation is a cap on donations from corporations and wealthy individuals, a measure that its supporters say will reduce the influence of money in politics and that its opponents characterise as a partisan manoeuvre designed to disadvantage rivals who rely more heavily on private fundraising.\n\nElection officials said they would require additional resources to implement the new rules before the next scheduled polling date and warned that some provisions might face legal challenges. Constitutional lawyers are divided on the question of whether the spending limits would survive scrutiny by the higher courts.`,
+    ],
+    quotes: [
+      'History will judge this agreement not by its words, but by whether the money actually arrives.',
+      'We came here to find common ground, and despite real differences, we found it.',
+      'The mandate we have received is clear. Now the work of governing begins in earnest.',
+    ],
+    captions: ['Delegates sign the final agreement at the concluding ceremony of the three-day summit.', 'Members of parliament cast their votes on the landmark reform bill in a packed chamber.'],
+  },
+  science: {
+    headlines: [
+      ['Ancient Ocean Discovered Beneath Antarctic Ice', 'Brine lake found three kilometres deep may harbour extremophile life forms'],
+      ['New Element Synthesised at Particle Accelerator', 'Superheavy atom 120 stable for record duration before decay'],
+      ['Brain Implant Restores Speech to Paralysed Patients', 'Clinical trial results show ninety-two percent accuracy in decoding intended words'],
+      ['Webb Telescope Detects Biosignature in Distant Atmosphere', 'Chemical signature consistent with biological processes found on exoplanet'],
+    ],
+    bodies: [
+      `A team of glaciologists has confirmed the existence of a liquid water lake beneath the Antarctic ice sheet, fed by geothermal heat and shielded from the surface by more than three kilometres of compacted snow and ice. The discovery, made using airborne radar and confirmed by drilling, opens new avenues in the search for life in extreme environments.\n\nThe water, which has been sealed from the atmosphere for millions of years, is highly saline and exists at temperatures below the normal freezing point of water due to the immense pressure exerted by the ice above. Such conditions are analogous to those believed to exist on the moons of Jupiter and Saturn, making the lake a potential natural laboratory for astrobiology.\n\nSamples extracted from the borehole are currently being analysed for microbial life. Contamination protocols during the drilling process were rigorous, but scientists acknowledged that proving the presence of indigenous organisms would require further work. The lake sediment, when eventually retrieved, may contain organisms or at minimum chemical traces of biological processes stretching back hundreds of thousands of years.\n\nThe discovery adds to a growing body of evidence that liquid water, long considered a prerequisite for life as we understand it, is far more widespread in the solar system than once assumed. Similar sub-glacial environments have been identified in Greenland and the Canadian Arctic.`,
+      `Scientists working at an international particle accelerator facility have synthesised atoms of element 120 for the first time, extending the periodic table by one position and providing new data on the so-called island of stability, a theoretical region in which superheavy elements are predicted to be significantly more durable than their neighbours.\n\nThe atoms, produced by colliding beams of calcium and plutonium nuclei, were detected by instruments sensitive enough to identify individual particles among billions of reactions. Each synthesis event produced only a handful of atoms, which existed for milliseconds before decaying into lighter elements. Nevertheless, their longevity exceeded predictions.\n\nNaming rights over the new element will eventually be assigned by the international body that governs chemical nomenclature, following a period of verification and priority assessment. Elements are customarily named after countries, institutions, or scientists of historical significance.`,
+    ],
+    quotes: [
+      'This is the first direct evidence that liquid water can persist at such extreme depths for geological timescales.',
+      'Every time we look harder, we find that the conditions for life are less rare than we imagined.',
+      'The periodic table is not finished. Nature still has surprises waiting for us in the heaviest elements.',
+    ],
+    captions: ['Drill cores extracted from the borehole reveal layered ice dating back hundreds of thousands of years.', 'The accelerator control room during the moment of synthesis, captured by the facility\'s science team.'],
+  },
+  economy: {
+    headlines: [
+      ['Central Bank Signals End to Rate-Rise Cycle', 'Governor indicates data supports pivot as inflation nears target'],
+      ['Manufacturing Output Hits Five-Year High', 'Reshoring trend accelerates as supply-chain risks prompt domestic investment'],
+      ['Unemployment Falls to Generational Low', 'Labour market tightness complicates inflation fight, economists warn'],
+      ['Global Trade Volumes Rebound After Year of Decline', 'Container shipping rates stabilise as demand from Asia improves'],
+    ],
+    bodies: [
+      `The central bank governor indicated that the prolonged cycle of interest rate increases may be drawing to a close, citing evidence that inflationary pressures are abating more quickly than the bank's own forecasts had anticipated. The remarks, delivered at a closely watched annual conference, sent government bond prices sharply higher.\n\nConsumer price inflation has fallen from its peak of more than ten percent to within a percentage point of the official target, reflecting the combined effect of monetary tightening, lower energy prices, and easing supply-chain pressures. Core inflation, which excludes food and energy, has proven more persistent, giving policymakers reason for continued vigilance.\n\nThe path to rate cuts is likely to be gradual, the governor stressed, emphasising that the bank would need to see sustained evidence of a return to price stability before loosening financial conditions. Several board members are understood to favour maintaining current rates into next year as insurance against a resurgence in inflation.\n\nMortgage markets reacted immediately to the governor's comments. Lenders revised their fixed-rate offerings downward, generating a surge of inquiries from homeowners seeking to refinance. Property analysts cautioned that a meaningful recovery in housing transactions would require more tangible evidence of the rate outlook rather than forward guidance alone.`,
+      `Factory output expanded at its fastest quarterly pace in five years, confounding analysts who had predicted a contraction driven by weakened export demand. The data, released by the national statistics office, showed broad-based growth across sectors including automotive, pharmaceuticals, and precision engineering.\n\nA reversal in offshoring trends is a significant contributor to the improvement. Corporations that had shifted production to lower-cost jurisdictions during the globalisation era of the 1990s and 2000s have invested heavily in domestic capacity in response to logistical disruptions experienced during the pandemic and its aftermath. Government subsidies for strategic sectors have also played a role, economists noted.\n\nThe employment implications of the manufacturing recovery have been more modest than headline output figures suggest, as much of the capacity expansion has been achieved through automation rather than additional hiring. The productivity gains are welcome, but their distributional effects are uneven.`,
+    ],
+    quotes: [
+      'The data gives us confidence, but confidence is not certainty. We will not declare victory prematurely.',
+      'The reshoring trend is structural, not cyclical. These jobs are coming back for the long term.',
+      'A soft landing was considered improbable eighteen months ago. Today it is the central scenario.',
+    ],
+    captions: ['The governor addresses assembled economists at the annual central banking symposium.', 'Workers on the production line at a newly expanded domestic manufacturing facility.'],
+  },
+  environment: {
+    headlines: [
+      ['E20 Fuel Begins Rollout in India', 'Coverage for the petrol blend targeted within one year'],
+      ['Arctic Sea Ice Reaches Record Low Extent', 'Summer minimum breaks previous record by margin scientists call alarming'],
+      ['Nations Agree to Triple Renewable Capacity by 2030', 'Agreement reached on sidelines of international energy forum'],
+      ['Reforestation Programme Surpasses One Billion Trees', 'Community-led effort covers area larger than several European nations'],
+    ],
+    bodies: [
+      `India has commenced the distribution of E20, a blend of twenty percent ethanol and eighty percent petrol, marking a significant step in the country's ambition to reduce dependence on imported crude oil and cut vehicular emissions. The rollout began in selected cities before spreading to a wider network of fuel stations.\n\nThe nationwide rollout is expected to achieve full coverage within one year. Government officials said the ethanol blending programme would benefit the environment and the economy, reducing carbon dioxide emissions while supporting the domestic sugarcane and grain industries that supply the biofuel feedstock.\n\nThe government stressed that the adoption of lower-emission fuels, improved air quality targets, and support for green energy all formed part of a broader strategy to reduce the country's carbon footprint. Policy experts identified the programme as among the more credible near-term emission reduction measures available given the existing vehicle fleet.\n\nConsumers can expect a modest reduction in fuel efficiency when using E20, as ethanol contains less energy per litre than petrol. However, the price differential is expected to result in comparable cost-per-kilometre figures for most users. Automakers have confirmed that modern engine management systems can accommodate the blend without modification.\n\nIndia is one of several major economies pursuing mandatory blending targets as an intermediate step toward electrification. The policy complements investments in charging infrastructure and incentives for electric vehicle adoption, which the government views as the long-term solution to transport emissions.`,
+      `Arctic sea ice reached its smallest recorded summertime extent since satellite observation began in the late 1970s, breaking the previous record by a margin that glaciologists described as troubling. The minimum, recorded in mid-September, was accompanied by unusually warm sea surface temperatures across the polar basin.\n\nThe loss of reflective sea ice accelerates warming through a process known as the albedo feedback effect, in which darker open water absorbs more solar radiation than the white ice it replaces. Scientists warned that the trend, if it continues, could push the Arctic toward ice-free summer conditions within decades.\n\nThe ecological consequences are already apparent. Species that depend on sea ice for breeding and hunting, including polar bears and several seal species, are facing habitat loss. Indigenous communities across the region have reported changes to traditional hunting grounds and the emergence of unfamiliar species from warmer southern waters.`,
+    ],
+    quotes: [
+      'The ethanol blending programme is expected to cut emissions and save foreign exchange.',
+      'What we are seeing in the Arctic is not a warning. It is a consequence.',
+      'Planting trees alone will not solve the climate crisis, but it is among the most cost-effective measures available to us right now.',
+    ],
+    captions: ['A fuel attendant operates an E20 pump at one of the newly equipped service stations in Delhi.', 'Aerial photography documents the retreating ice edge in the Beaufort Sea during the record low summer.'],
+  },
+  sports: {
+    headlines: [
+      ['Home Side Clinches Championship in Final Minute', 'Dramatic stoppage-time goal seals title after decade-long wait'],
+      ['Record-Breaking Sprinter Eyes Multiple World Titles', 'Athlete clocks fastest time in twelve years at national championships'],
+      ['Historic Grand Slam Secured by Unseeded Finalist', 'The lowest-ranked player ever to win the title defeats defending champion'],
+      ['National Team Names Youngest-Ever Squad for World Cup', 'Generational shift as selectors back youth ahead of tournament experience'],
+    ],
+    bodies: [
+      `A goal scored in the second minute of added time delivered the championship title to a side that had not won the league in eleven years, sending the stadium into scenes of extraordinary jubilation. Tens of thousands of supporters had stayed until the final whistle despite a match that had seemed, for the eighty-eight minutes preceding the decisive moment, to be headed for an anticlimactic draw.\n\nThe scorer, a substitute who had been on the pitch for fewer than ten minutes, described the moment as the most significant of his career. His manager, who came close to resigning during a difficult run in the middle of the season, accepted the trophy with visible emotion, paying tribute to players who had persisted through a period of poor results that had seemed likely to end the title challenge prematurely.\n\nRivals who had led the standings for much of the year were unable to overturn the deficit in their simultaneous fixture, finishing the campaign in second place despite a points total that would have sufficed for the title in any of the previous five seasons. The final standings represent one of the most compressed top-three finishes in the competition's history.\n\nThe celebrations are expected to continue for several days. The club's board announced a public parade through the city centre for the following weekend, with several hundred thousand spectators expected to line the route.`,
+      `An athlete competing in only her third major international final overcame the world number one in a contest that lasted nearly four hours to claim the most prestigious title in the sport. Her victory, achieved in three sets after surrendering the second in a tiebreak, is the most significant achieved by an unseeded finalist in the modern era of professional competition.\n\nHer rise through the rankings over the past eighteen months has been among the most rapid in the sport's recent history. This time last year she was ranked outside the top one hundred; she now stands on the threshold of the top ten following her victory, which carried a prize fund of several million dollars. Analysts predict she will close the year inside the top five if current form continues.`,
+    ],
+    quotes: [
+      'Eleven years. Eleven long years. I am so proud of every person in that dressing room.',
+      'I told myself not to think about the occasion. Just to play my game, point by point.',
+      'This generation has the talent. What they needed was the belief. Today they found it.',
+    ],
+    captions: ['The triumphant captain lifts the trophy before an ecstatic home crowd at the packed stadium.', 'The champion celebrates on court after her victory over the defending title holder.'],
+  },
+};
+
+const LOCATIONS = ['NEW DELHI', 'LONDON', 'WASHINGTON', 'PARIS', 'BEIJING', 'GENEVA', 'NEW YORK', 'SYDNEY', 'TOKYO'];
+const CORRESPONDENTS = ['Our Special Correspondent', 'Our Foreign Correspondent', 'Our Staff Reporter', 'Our Economics Editor', 'From Our Science Correspondent'];
+
+const FONTS   = ['font-playfair', 'font-baskerville', 'font-imfell', 'font-lora', 'font-georgia'];
+const THEMES  = ['theme-cream', 'theme-aged', 'theme-white', 'theme-sepia', 'theme-dusk'];
+const LAYOUTS = ['classic', 'wide-left', 'wide-right', 'three-col', 'single'];
+const TOPICS  = ['tech', 'politics', 'science', 'economy', 'environment', 'sports'];
+
+const HEADLINE_SIZES = ['52px', '58px', '64px', '48px', '70px'];
+const BODY_SIZES     = ['14px', '15px', '13px', '14.5px'];
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+function formatDate() {
+  const d = new Date();
+  return d.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase();
+}
+
+function splitIntoParagraphs(text) {
+  return text.split('\n\n').filter(Boolean);
+}
+
+// Simple halftone-style SVG placeholder images
+function photoSVG(seed, w, h) {
+  const scenes = [
+    // Generic "scene 1" — figure at desk
+    `<rect width="${w}" height="${h}" fill="#ccc"/>
+     <rect x="${w*0.3}" y="${h*0.25}" width="${w*0.4}" height="${h*0.5}" fill="#888" rx="3"/>
+     <circle cx="${w*0.5}" cy="${h*0.2}" r="${h*0.12}" fill="#aaa"/>
+     <rect x="0" y="${h*0.75}" width="${w}" height="${h*0.25}" fill="#999"/>`,
+    // Generic "scene 2" — crowd/building
+    `<rect width="${w}" height="${h}" fill="#b0b0b0"/>
+     <rect x="${w*0.1}" y="${h*0.3}" width="${w*0.3}" height="${h*0.7}" fill="#777"/>
+     <rect x="${w*0.5}" y="${h*0.15}" width="${w*0.4}" height="${h*0.85}" fill="#888"/>
+     <rect x="${w*0.2}" y="${h*0.45}" width="${w*0.55}" height="${h*0.1}" fill="#555"/>`,
+    // Generic "scene 3" — landscape
+    `<rect width="${w}" height="${h*0.5}" fill="#b8c4cc"/>
+     <rect width="${w}" y="${h*0.5}" height="${h*0.5}" fill="#7a8a70"/>
+     <ellipse cx="${w*0.2}" cy="${h*0.45}" rx="${w*0.12}" ry="${h*0.25}" fill="#3a5030"/>
+     <ellipse cx="${w*0.75}" cy="${h*0.5}" rx="${w*0.18}" ry="${h*0.35}" fill="#445038"/>`,
+  ];
+  const scene = scenes[seed % scenes.length];
+  return `data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'>${encodeURIComponent(scene)}</svg>`;
+}
+
+// ── Generate ──────────────────────────────────────────────────────────────
+
+let lastConfig = null;
+
+function generate(randomizeControls = true) {
+  if (randomizeControls) {
+    document.getElementById('topicSelect').value  = 'random';
+    document.getElementById('layoutSelect').value = 'random';
+    document.getElementById('fontSelect').value   = 'random';
+    document.getElementById('themeSelect').value  = 'random';
+    document.getElementById('grainRange').value   = (Math.random() * 0.7 + 0.1).toFixed(1);
+  }
+
+  const topicVal  = document.getElementById('topicSelect').value;
+  const layoutVal = document.getElementById('layoutSelect').value;
+  const fontVal   = document.getElementById('fontSelect').value;
+  const themeVal  = document.getElementById('themeSelect').value;
+  const grain     = parseFloat(document.getElementById('grainRange').value);
+
+  const topic   = topicVal  === 'random' ? pick(TOPICS)   : topicVal;
+  const layout  = layoutVal === 'random' ? pick(LAYOUTS)  : layoutVal;
+  const font    = fontVal   === 'random' ? pick(FONTS)    : fontVal;
+  const theme   = themeVal  === 'random' ? pick(THEMES)   : themeVal;
+
+  const data       = ARTICLES[topic];
+  const headlinePair = pick(data.headlines);
+  const headline   = headlinePair[0];
+  const deck       = headlinePair[1];
+  const bodyText   = pick(data.bodies);
+  const pullQuote  = pick(data.quotes);
+  const caption    = pick(data.captions);
+  const paper      = pick(PAPERS);
+  const location   = pick(LOCATIONS);
+  const byline     = pick(CORRESPONDENTS);
+  const hSize      = pick(HEADLINE_SIZES);
+  const bSize      = pick(BODY_SIZES);
+  const seed       = Math.floor(Math.random() * 3);
+  const photoH     = [180, 200, 220, 160][Math.floor(Math.random() * 4)];
+
+  const np = document.getElementById('newspaper');
+
+  // Apply classes
+  np.className = `newspaper ${font} ${theme}`;
+  np.style.setProperty('--grain-opacity', grain);
+
+  np.innerHTML = buildLayout(layout, { headline, deck, bodyText, pullQuote, caption, paper, location, byline, hSize, bSize, seed, photoH });
+}
+
+function buildLayout(layout, d) {
+  const { headline, deck, bodyText, pullQuote, caption, paper, location, byline, hSize, bSize, seed, photoH } = d;
+  const paras = splitIntoParagraphs(bodyText);
+  const half  = Math.ceil(paras.length / 2);
+  const third = Math.ceil(paras.length / 3);
+
+  const photoImg = `<div class="photo-block">
+    <div class="photo-placeholder" style="height:${photoH}px;">
+      <img src="${photoSVG(seed, 360, photoH)}" style="width:100%;height:100%;object-fit:cover;opacity:0.7;filter:grayscale(100%) contrast(1.2);" alt="news photo"/>
+    </div>
+    <p class="photo-caption">${caption}</p>
+  </div>`;
+
+  const pq = `<div class="pull-quote"><p>${pullQuote}</p></div>`;
+
+  const renderParas = (arr) => arr.map(p => `<p style="font-size:${bSize}">${p}</p>`).join('');
+
+  const mastheadHTML = `
+    <div class="masthead">
+      <div class="masthead-name" style="font-size:11px;letter-spacing:6px;">${paper.toUpperCase()}</div>
+      <div class="pub-date">${formatDate()} &nbsp;·&nbsp; Price: Two Rupees</div>
+    </div>
+    <div class="rule-double"></div>`;
+
+  const topHTML = `
+    ${mastheadHTML}
+    <h1 class="headline" style="font-size:${hSize};margin-bottom:10px;">${headline}</h1>
+    <p class="deck" style="font-style:italic;">${deck}</p>
+    <div class="rule-single"></div>
+    <div class="byline-block">
+      <div class="dateline">${location} Pub.</div>
+      <div class="byline">by ${byline}</div>
+    </div>`;
+
+  if (layout === 'single') {
+    return `${topHTML}
+      <div class="article-body" style="grid-template-columns:1fr;">
+        <div>${renderParas(paras)}</div>
+        ${photoImg}
+        ${pq}
+      </div>`;
+  }
+
+  if (layout === 'classic') {
+    return `${topHTML}
+      <div class="article-body cols-2">
+        <div>${renderParas(paras.slice(0, half))}</div>
+        <div>
+          ${photoImg}
+          ${renderParas(paras.slice(half, half + 1))}
+          ${pq}
+          ${renderParas(paras.slice(half + 1))}
+        </div>
+      </div>`;
+  }
+
+  if (layout === 'wide-left') {
+    return `${topHTML}
+      <div class="article-body cols-2-1">
+        <div>${renderParas(paras.slice(0, Math.ceil(paras.length * 0.6)))}</div>
+        <div>
+          ${photoImg}
+          ${pq}
+          ${renderParas(paras.slice(Math.ceil(paras.length * 0.6)))}
+        </div>
+      </div>`;
+  }
+
+  if (layout === 'wide-right') {
+    return `${topHTML}
+      <div class="article-body cols-1-2">
+        <div>
+          ${photoImg}
+          ${pq}
+        </div>
+        <div>${renderParas(paras)}</div>
+      </div>`;
+  }
+
+  if (layout === 'three-col') {
+    return `${topHTML}
+      <div class="article-body cols-3">
+        <div>${renderParas(paras.slice(0, third))}</div>
+        <div>
+          ${photoImg}
+          ${renderParas(paras.slice(third, third + 1))}
+          ${pq}
+        </div>
+        <div>${renderParas(paras.slice(third + 1))}</div>
+      </div>`;
+  }
+
+  // fallback classic
+  return `${topHTML}
+    <div class="article-body cols-2">
+      <div>${renderParas(paras.slice(0, half))}</div>
+      <div>${photoImg}${pq}${renderParas(paras.slice(half))}</div>
+    </div>`;
+}
+
+// ── Wire up live controls ────────────────────────────────────────────────
+
+['topicSelect', 'layoutSelect', 'fontSelect', 'themeSelect'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => generate(false));
+});
+
+document.getElementById('grainRange').addEventListener('input', e => {
+  document.getElementById('newspaper').style.setProperty('--grain-opacity', e.target.value);
+});
+
+// Initial render
+generate(true);
+</script>
+</body>
+</html>
