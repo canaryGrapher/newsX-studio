@@ -3,8 +3,9 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Layers, Sliders, Film, FolderHeart, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Sliders, Film, FolderHeart, PanelLeftClose, PanelLeft } from "lucide-react";
 import { useWorkspace } from "./WorkspaceProvider";
+import Logo from "./Logo";
 
 const NAV_ITEMS = [
   { href: "/compose", label: "Compose", icon: Sliders },
@@ -21,8 +22,8 @@ export default function WorkspaceShell({ children }: { children: React.ReactNode
       {/* Column 1 — Navigation rail (collapsible) */}
       <aside className={`nav-rail ${navCollapsed ? "collapsed" : ""}`}>
         <div className="nav-rail-brand">
-          <span className="brand-mark">
-            <Layers className="w-5 h-5" />
+          <span className="brand-logo">
+            <Logo size={38} />
           </span>
           {!navCollapsed && (
             <span>

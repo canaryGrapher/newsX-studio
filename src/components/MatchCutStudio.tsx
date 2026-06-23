@@ -19,6 +19,8 @@ import {
   highlightProgress,
 } from "@/lib/matchcut";
 import { ExportFormat, webmToMp4 } from "@/lib/videoExport";
+import { sliceAudioBuffer } from "@/lib/audioTrim";
+import WaveformTrim from "./AudioTrim";
 import { analytics } from "@/lib/analytics";
 import {
   Film,
@@ -126,10 +128,12 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
   const [sfxName, setSfxName] = useState("");
   const [sfxOn, setSfxOn] = useState(true);
   const [sfxVolume, setSfxVolume] = useState(1);
+  const [sfxStart, setSfxStart] = useState(0);
   const [bgBuffer, setBgBuffer] = useState<AudioBuffer | null>(null);
   const [bgName, setBgName] = useState("");
   const [bgOn, setBgOn] = useState(true);
   const [bgVolume, setBgVolume] = useState(0.6);
+  const [bgStart, setBgStart] = useState(0);
 
   // Recording
   const [recording, setRecording] = useState(false);
@@ -163,6 +167,12 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
   sfxOnRef.current = sfxOn;
   const sfxVolRef = useRef(sfxVolume);
   sfxVolRef.current = sfxVolume;
+  // Trim windows (seconds) used by the live preview; kept in refs so the
+  // stable playback callbacks always read the latest values.
+  const sfxStartRef = useRef(0);
+  const sfxEndRef = useRef(0);
+  const bgStartRef = useRef(0);
+  const bgEndRef = useRef(0);
   const sfxUrlRef = useRef<string>(""); // object URL for the cut SFX
   const bgElRef = useRef<HTMLAudioElement | null>(null); // looping bg track
   const bgUrlRef = useRef<string>(""); // object URL for the bg track
@@ -185,7 +195,25 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
     try {
       const a = new Audio(sfxUrlRef.current);
       a.volume = sfxVolRef.current;
-      void a.play().catch(() => {});
+      const start = sfxStartRef.current;
+      const win = Math.max(0.02, sfxEndRef.current - start);
+      const begin = () => {
+        try {
+          a.currentTime = start;
+        } catch {
+          /* ignore seek errors */
+        }
+        void a.play().catch(() => {});
+        window.setTimeout(() => {
+          try {
+            a.pause();
+          } catch {
+            /* ignore */
+          }
+        }, win * 1000);
+      };
+      if (a.readyState >= 1) begin();
+      else a.addEventListener("loadedmetadata", begin, { once: true });
     } catch {
       /* ignore */
     }
@@ -292,16 +320,20 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
         sfxUrlRef.current = url;
         setSfxBuffer(buf);
         setSfxName(file.name);
+        // Start the trim window at the beginning of the clip.
+        setSfxStart(0);
       } else {
         bgElRef.current?.pause();
         if (bgUrlRef.current) URL.revokeObjectURL(bgUrlRef.current);
         bgUrlRef.current = url;
         const el = new Audio(url);
-        el.loop = true;
+        // Looping is handled manually so playback stays inside the trim window.
+        el.loop = false;
         el.volume = bgVolume;
         bgElRef.current = el;
         setBgBuffer(buf);
         setBgName(file.name);
+        setBgStart(0);
       }
       analytics.audioUploaded(kind, file);
     } catch {
@@ -318,6 +350,7 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
       sfxUrlRef.current = "";
       setSfxBuffer(null);
       setSfxName("");
+      setSfxStart(0);
     } else {
       bgElRef.current?.pause();
       bgElRef.current = null;
@@ -325,6 +358,7 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
       bgUrlRef.current = "";
       setBgBuffer(null);
       setBgName("");
+      setBgStart(0);
     }
   };
 
@@ -421,6 +455,26 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
 
   // ── Live preview ──
   const totalMs = Math.max(1, frames.length * holdMs);
+  const holdSec = holdMs / 1000;
+  const totalSec = totalMs / 1000;
+
+  // Effective trim windows. The selection length is fixed: per-frame time for
+  // the cut SFX, full video length for the background track (clamped to the
+  // clip). Dragging the waveform box only moves the start.
+  const sfxDur = sfxBuffer?.duration ?? 0;
+  const sfxWin = sfxDur > 0 ? Math.min(holdSec, sfxDur) : 0;
+  const sfxStartEff = Math.min(Math.max(0, sfxStart), Math.max(0, sfxDur - sfxWin));
+  const sfxEndEff = Math.min(sfxDur, sfxStartEff + sfxWin);
+
+  const bgDur = bgBuffer?.duration ?? 0;
+  const bgWin = bgDur > 0 ? Math.min(totalSec, bgDur) : 0;
+  const bgStartEff = Math.min(Math.max(0, bgStart), Math.max(0, bgDur - bgWin));
+  const bgEndEff = Math.min(bgDur, bgStartEff + bgWin);
+
+  sfxStartRef.current = sfxStartEff;
+  sfxEndRef.current = sfxEndEff;
+  bgStartRef.current = bgStartEff;
+  bgEndRef.current = bgEndEff;
 
   // Draw the frame that corresponds to a point in time (ms into the sequence).
   const drawAt = useCallback(
@@ -477,14 +531,31 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
     return () => cancelAnimationFrame(raf);
   }, [playing, frames.length, totalMs, holdMs, drawAt, playCutSfx]);
 
-  // Background track — loops via an HTMLAudio element while playing.
+  // Background track — loops within its trim window while playing.
   useEffect(() => {
     const el = bgElRef.current;
     if (!playing || !bgOn || !el || frames.length < 2) return;
-    el.currentTime = 0;
+    try {
+      el.currentTime = bgStartRef.current;
+    } catch {
+      /* ignore seek errors */
+    }
     void el.play().catch(() => {});
+    const onTime = () => {
+      const end = bgEndRef.current;
+      if (end > 0 && el.currentTime >= end) {
+        try {
+          el.currentTime = bgStartRef.current;
+        } catch {
+          /* ignore */
+        }
+        void el.play().catch(() => {});
+      }
+    };
+    el.addEventListener("timeupdate", onTime);
     return () => {
       el.pause();
+      el.removeEventListener("timeupdate", onTime);
     };
   }, [playing, bgOn, bgName, frames.length]);
 
@@ -510,7 +581,19 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
       duration_ms: totalMs,
     });
     try {
-      const audio: MatchCutAudio = { sfxBuffer, bgBuffer, sfxOn, bgOn, sfxVolume, bgVolume };
+      // Apply the trim windows before recording (per-frame cap for SFX,
+      // video-length cap for BG — both already baked into sfxTrim/bgTrim).
+      const ctx = ensureDecodeCtx();
+      const sfxClip = sfxBuffer ? sliceAudioBuffer(ctx, sfxBuffer, sfxStartEff, sfxEndEff) : null;
+      const bgClip = bgBuffer ? sliceAudioBuffer(ctx, bgBuffer, bgStartEff, bgEndEff) : null;
+      const audio: MatchCutAudio = {
+        sfxBuffer: sfxClip,
+        bgBuffer: bgClip,
+        sfxOn,
+        bgOn,
+        sfxVolume,
+        bgVolume,
+      };
       const wantMp4 = format === "mp4";
       const { blob, mime } = await recordMatchCut(frames, opts, audio, setRecProgress, wantMp4);
 
@@ -881,6 +964,14 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
               volume={sfxVolume}
               onVolume={setSfxVolume}
               onRemove={() => removeAudio("sfx")}
+              trim={{
+                buffer: sfxBuffer,
+                duration: sfxDur,
+                start: sfxStartEff,
+                windowSec: sfxWin,
+                windowLabel: "per frame",
+                onChange: setSfxStart,
+              }}
             />
             <AudioRow
               icon={<Music className="w-3.5 h-3.5" />}
@@ -893,6 +984,14 @@ export default function MatchCutStudio({ libraryArticles }: MatchCutStudioProps)
               volume={bgVolume}
               onVolume={setBgVolume}
               onRemove={() => removeAudio("bg")}
+              trim={{
+                buffer: bgBuffer,
+                duration: bgDur,
+                start: bgStartEff,
+                windowSec: bgWin,
+                windowLabel: "video length",
+                onChange: setBgStart,
+              }}
             />
           </div>
 
@@ -1173,6 +1272,7 @@ function AudioRow({
   volume,
   onVolume,
   onRemove,
+  trim,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -1184,6 +1284,14 @@ function AudioRow({
   volume: number;
   onVolume: (v: number) => void;
   onRemove: () => void;
+  trim?: {
+    buffer: AudioBuffer | null;
+    duration: number;
+    start: number;
+    windowSec: number;
+    windowLabel: string;
+    onChange: (start: number) => void;
+  };
 }) {
   const hasFile = !!name;
   return (
@@ -1249,6 +1357,18 @@ function AudioRow({
             {Math.round(volume * 100)}%
           </span>
         </label>
+      )}
+
+      {hasFile && trim && trim.buffer && trim.duration > 0 && (
+        <WaveformTrim
+          buffer={trim.buffer}
+          duration={trim.duration}
+          start={trim.start}
+          windowSec={trim.windowSec}
+          windowLabel={trim.windowLabel}
+          disabled={!on}
+          onChange={trim.onChange}
+        />
       )}
     </div>
   );
