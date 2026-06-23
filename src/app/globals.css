@@ -841,6 +841,65 @@ selection {
   padding: 10px 0;
 }
 
+/* Mobile: collapse folds the rail into a horizontal icon row (accordion) */
+@media (max-width: 1100px) {
+  .nav-rail {
+    transition: gap 0.24s var(--ease), padding 0.24s var(--ease);
+  }
+
+  /* The vertical nav list animates open/closed like an accordion */
+  .nav-rail-items {
+    overflow: hidden;
+    transition: max-height 0.28s var(--ease), opacity 0.2s var(--ease-soft);
+    max-height: 600px;
+    opacity: 1;
+  }
+
+  /* Collapsed: lay brand, icons and toggle out in a single row */
+  .nav-rail.collapsed {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .nav-rail.collapsed .nav-rail-brand {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding: 0;
+    min-height: 0;
+    flex-shrink: 0;
+  }
+
+  /* Icons spread out equally and stay tappable */
+  .nav-rail.collapsed .nav-rail-items {
+    flex-direction: row;
+    flex: 1;
+    gap: 6px;
+    justify-content: space-around;
+    max-height: 56px;
+  }
+
+  .nav-rail.collapsed .nav-item {
+    flex: 1;
+    justify-content: center;
+    padding: 12px 0;
+    min-height: 44px;
+  }
+
+  .nav-rail.collapsed .nav-item .nav-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .nav-rail.collapsed .nav-collapse-btn {
+    width: auto;
+    margin-top: 0;
+    padding: 12px;
+    flex-shrink: 0;
+  }
+}
+
 /* Sidebar — a single floating card */
 .sidebar-panel {
   background-color: var(--bg-card);
